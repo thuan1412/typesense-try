@@ -1,4 +1,8 @@
 const typesense = require("typesense");
+
+const mdParser = require("./md-parser");
+const { getMdFileList } = require("./utils");
+
 let client = new typesense.Client({
   nodes: [
     {
@@ -12,11 +16,11 @@ let client = new typesense.Client({
 });
 
 const COLLECTION_NAME = "docs";
+
 (async function () {
   // delete the `docs` collection if exist
   try {
-    const collection = await client.collections(COLLECTION_NAME).retrieve();
-    // console.log(`Drop the ${collection.name} successfully`);
+    await client.collections(COLLECTION_NAME).retrieve();
 
     client.collections(COLLECTION_NAME).delete();
   } catch (err) {
@@ -28,7 +32,7 @@ const COLLECTION_NAME = "docs";
     name: COLLECTION_NAME,
     fields: [
       {
-        name: "file_name", // for production, we may need to change to url to the docs
+        name: "section_idx", // for production, we may need to change to url to the docs
         type: "string",
         facet: false,
         index: false,
@@ -47,36 +51,41 @@ const COLLECTION_NAME = "docs";
     ],
   };
 
-  const collection = await client.collections().create(schema);
-  // console.log(collection);
+  await client.collections().create(schema);
 
   // insert data
-  let docs = [
-    {
-      id: "index.md",
-      section: "hello",
-      content: "loooooooooo",
-    },
-    {
-      id: "index-2.md",
-      section: "goodbye",
-      content: "hel",
-    },
-  ];
-  // console.log(COLLECTION_NAME);
+  const fileList = [];
+  await getMdFileList("./v2/", fileList);
 
-  await client
-    .collections(COLLECTION_NAME)
-    .documents()
-    .import(docs, { action: 'create' })
+  for (let i = 0; i < fileList.length; i++) {
+    const filename = fileList[i];
+    const data = await mdParser(filename);
+    console.log(filename);
+    if (data.length === 0) continue;
+    try {
+      await client
+        .collections(COLLECTION_NAME)
+        .documents()
+        .import(data, { action: "create" });
+    } catch (err) {
+      console.log("error at file", filename, err, data);
+    }
+  }
 
   const searchParams = {
-    q: "hello",
+    q: "thực hiện ràng buộc",
     query_by: "section,content",
   };
   const result = await client
     .collections(COLLECTION_NAME)
     .documents()
     .search(searchParams);
-  console.log(JSON.stringify(result.hits));
+  console.log(
+    // JSON.stringify(
+    result.hits.map((doc) => {
+      return doc.highlights;
+    })
+    // )
+  );
+  // console.log(result.hits.);
 })();
