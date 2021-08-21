@@ -23,7 +23,7 @@ async function mdParser(filename) {
     }
     content += lines[i];
   }
-  // console.log(data);
+  data.push({section_idx: filename + section, section, content });
   return data;
 }
 
